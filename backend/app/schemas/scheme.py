@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EligibilityRuleSchema(BaseModel):
@@ -33,3 +33,10 @@ class SchemeDetail(SchemeSummary):
     eligibility_rules: list[EligibilityRuleSchema]
     verified_at: object | None = None
     updated_at: object | None = None
+
+
+class SchemeListResponse(BaseModel):
+    schemes: list[SchemeSummary]
+    total: int
+    page: int
+    page_size: int
