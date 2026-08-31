@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     llm_mock_mode: bool = False
 
     secret_key: str = "dev-secret-change-in-production"
+    admin_api_key: str = ""
     access_token_expire_minutes: int = 60
 
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

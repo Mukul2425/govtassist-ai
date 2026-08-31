@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import get_settings
 from app.models.database import get_db
 from app.models.scheme import Scheme
 from app.schemas.scheme import SchemeDetail, SchemeListResponse, SchemeSummary
+from app.services.cache_service import cache_get, cache_set
 
 router = APIRouter(prefix="/schemes", tags=["Schemes"])
+settings = get_settings()
 
 
 @router.get("", response_model=SchemeListResponse)
@@ -19,6 +22,11 @@ async def list_schemes(
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ) -> SchemeListResponse:
+    cache_key = f"schemes:{state}:{category}:{search}:{page}:{page_size}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return SchemeListResponse.model_validate(cached)
+
     stmt = select(Scheme).where(Scheme.is_active.is_(True))
 
     if state:
@@ -46,12 +54,32 @@ async def list_schemes(
     result = await db.execute(stmt)
     schemes = result.scalars().all()
 
-    return SchemeListResponse(
+    response = SchemeListResponse(
         schemes=[SchemeSummary.model_validate(s) for s in schemes],
         total=total,
         page=page,
         page_size=page_size,
     )
+    await cache_set(cache_key, response.model_dump(), ttl_seconds=600)
+    return response
+
+
+@router.get("/categories/list")
+async def list_categories(db: AsyncSession = Depends(get_db)) -> dict:
+    cached = await cache_get("schemes:categories")
+    if cached:
+        return cached
+
+    result = await db.execute(
+        select(Scheme.category, func.count())
+        .where(Scheme.is_active.is_(True))
+        .group_by(Scheme.category)
+        .order_by(Scheme.category)
+    )
+    categories = [{"name": row[0], "count": row[1]} for row in result.all()]
+    payload = {"categories": categories, "total": len(categories)}
+    await cache_set("schemes:categories", payload, ttl_seconds=3600)
+    return payload
 
 
 @router.get("/{scheme_id}", response_model=SchemeDetail)
@@ -59,6 +87,11 @@ async def get_scheme(
     scheme_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> SchemeDetail:
+    cache_key = f"scheme:{scheme_id}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return SchemeDetail.model_validate(cached)
+
     result = await db.execute(
         select(Scheme)
         .options(selectinload(Scheme.eligibility_rules))
@@ -66,8 +99,8 @@ async def get_scheme(
     )
     scheme = result.scalar_one_or_none()
     if not scheme:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Scheme not found")
 
-    return SchemeDetail.model_validate(scheme)
+    detail = SchemeDetail.model_validate(scheme)
+    await cache_set(cache_key, detail.model_dump(), ttl_seconds=3600)
+    return detail

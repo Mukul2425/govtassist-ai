@@ -1,7 +1,8 @@
-"""Agent orchestrator for the full recommendation pipeline."""
+"""Agent orchestrator with multi-turn session support."""
 
 from uuid import uuid4
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.eligibility_agent import evaluate_schemes
@@ -26,16 +27,35 @@ DISCLAIMER = (
 
 
 class RecommendationOrchestrator:
+    async def _load_session_profile(
+        self,
+        session: AsyncSession,
+        session_id: str | None,
+    ) -> UserProfile | None:
+        if not session_id:
+            return None
+        result = await session.execute(
+            select(QuerySession).where(QuerySession.id == session_id)
+        )
+        row = result.scalar_one_or_none()
+        if row and row.extracted_profile:
+            return UserProfile.model_validate(row.extracted_profile)
+        return None
+
     async def run(
         self,
         session: AsyncSession,
         query: str,
         profile: UserProfile | None = None,
+        session_id: str | None = None,
         max_results: int = 10,
     ) -> RecommendationResponse:
-        session_id = str(uuid4())
+        new_session_id = session_id or str(uuid4())
 
-        extraction = await extract_profile(query, profile)
+        prior_profile = await self._load_session_profile(session, session_id)
+        base_profile = profile or prior_profile
+
+        extraction = await extract_profile(query, base_profile)
         user_profile = extraction.profile
 
         schemes = await search_schemes(session, user_profile, query)
@@ -80,23 +100,46 @@ class RecommendationOrchestrator:
             query, user_profile, [r.model_dump() for r in recommendations]
         )
 
-        query_session = QuerySession(
-            id=session_id,
-            user_query=query,
-            extracted_profile=user_profile.model_dump(exclude_none=True),
-            recommendations=[r.model_dump() for r in recommendations],
-            response_text=summary,
-        )
-        session.add(query_session)
+        if session_id:
+            result = await session.execute(
+                select(QuerySession).where(QuerySession.id == session_id)
+            )
+            existing = result.scalar_one_or_none()
+            if existing:
+                existing.user_query = query
+                existing.extracted_profile = user_profile.model_dump(exclude_none=True)
+                existing.recommendations = [r.model_dump() for r in recommendations]
+                existing.response_text = summary
+            else:
+                session.add(
+                    QuerySession(
+                        id=new_session_id,
+                        user_query=query,
+                        extracted_profile=user_profile.model_dump(exclude_none=True),
+                        recommendations=[r.model_dump() for r in recommendations],
+                        response_text=summary,
+                    )
+                )
+        else:
+            session.add(
+                QuerySession(
+                    id=new_session_id,
+                    user_query=query,
+                    extracted_profile=user_profile.model_dump(exclude_none=True),
+                    recommendations=[r.model_dump() for r in recommendations],
+                    response_text=summary,
+                )
+            )
 
         logger.info(
             "recommendation_complete",
-            session_id=session_id,
+            session_id=new_session_id,
             recommendations=len(recommendations),
+            continued=bool(session_id),
         )
 
         return RecommendationResponse(
-            session_id=session_id,
+            session_id=new_session_id,
             query=query,
             extracted_profile=user_profile,
             recommendations=recommendations,

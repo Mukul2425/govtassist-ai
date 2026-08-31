@@ -54,6 +54,7 @@ class SchemeRecommendation(BaseModel):
 class RecommendationRequest(BaseModel):
     query: str = Field(..., min_length=5, max_length=2000)
     profile: UserProfile | None = None
+    session_id: str | None = Field(None, description="Continue a previous conversation session")
     max_results: int = Field(10, ge=1, le=25)
 
 

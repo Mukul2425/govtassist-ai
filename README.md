@@ -129,11 +129,18 @@ govtassist-ai/
 
 ## Seeded Schemes
 
-The database ships with 10 real government schemes including:
+The database ships with **30+ real government schemes** including:
 
-- PM-KISAN, PM-JAY, Stand-Up India, PMKVY
-- National Scholarship Portal, MUDRA, PMAY, Sukanya Samriddhi
-- Haryana Merit Scholarship, Haryana Unemployment Allowance
+- **Central:** PM-KISAN, PM-JAY, PMKVY, MUDRA, PMAY, Stand-Up India, PM SVANidhi, PM Vishwakarma, APY, PMFBY, KCC, Ujjwala, PMSBY, PMJJBY, e-Shram, Startup Seed Fund, NAPS, NRLM, NSP, NMMS, Post Matric SC Scholarship, Sukanya Samriddhi
+- **State:** Haryana Merit Scholarship, Haryana Unemployment Allowance, Karnataka Yuva Nidhi, Maharashtra Ladki Bahin, UP Kanya Sumangala, Bihar Student Credit Card, Rajasthan Palanhar, Tamil Nadu Free Bus, Punjab Smart Ration
+
+## Key Features
+
+- **RAG with pgvector** — document embeddings generated on seed (OpenAI or local fallback)
+- **Multi-turn conversations** — pass `session_id` to continue and refine profile
+- **Redis caching** — scheme list and category endpoints cached
+- **Admin ingestion API** — `POST /api/v1/admin/schemes` with `X-Admin-Key` header
+- **Scheme browser** — frontend at `/schemes` with search and category filters
 
 ## Testing
 

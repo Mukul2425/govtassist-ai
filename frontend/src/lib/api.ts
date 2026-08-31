@@ -58,16 +58,26 @@ export interface SchemeSummary {
   official_source_url: string;
 }
 
+export interface CategoryCount {
+  name: string;
+  count: number;
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 export async function getRecommendations(
   query: string,
-  profile?: UserProfile
+  options?: { profile?: UserProfile; sessionId?: string; maxResults?: number }
 ): Promise<RecommendationResponse> {
   const res = await fetch(`${API_URL}/recommendations`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, profile, max_results: 10 }),
+    body: JSON.stringify({
+      query,
+      profile: options?.profile,
+      session_id: options?.sessionId,
+      max_results: options?.maxResults ?? 10,
+    }),
   });
 
   if (!res.ok) {
@@ -78,15 +88,29 @@ export async function getRecommendations(
   return res.json();
 }
 
-export async function listSchemes(search?: string): Promise<SchemeSummary[]> {
-  const params = new URLSearchParams();
-  if (search) params.set("search", search);
+export async function listSchemes(params?: {
+  search?: string;
+  state?: string;
+  category?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ schemes: SchemeSummary[]; total: number; page: number; page_size: number }> {
+  const qs = new URLSearchParams();
+  if (params?.search) qs.set("search", params.search);
+  if (params?.state) qs.set("state", params.state);
+  if (params?.category) qs.set("category", params.category);
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.pageSize) qs.set("page_size", String(params.pageSize));
 
-  const res = await fetch(`${API_URL}/schemes?${params}`);
+  const res = await fetch(`${API_URL}/schemes?${qs}`);
   if (!res.ok) throw new Error("Failed to fetch schemes");
+  return res.json();
+}
 
-  const data = await res.json();
-  return data.schemes;
+export async function listCategories(): Promise<{ categories: CategoryCount[]; total: number }> {
+  const res = await fetch(`${API_URL}/schemes/categories/list`);
+  if (!res.ok) throw new Error("Failed to fetch categories");
+  return res.json();
 }
 
 export async function checkHealth(): Promise<{ status: string; llm_available: boolean }> {

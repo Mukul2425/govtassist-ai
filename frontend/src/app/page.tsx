@@ -12,6 +12,7 @@ import {
   Shield,
   Sparkles,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import type { RecommendationResponse, SchemeRecommendation } from "@/lib/api";
@@ -147,6 +148,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RecommendationResponse | null>(null);
+  const [sessionId, setSessionId] = useState<string | undefined>();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -156,8 +158,10 @@ export default function HomePage() {
     setError(null);
 
     try {
-      const data = await getRecommendations(query.trim());
+      const data = await getRecommendations(query.trim(), { sessionId });
       setResult(data);
+      setSessionId(data.session_id);
+      setQuery("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -165,8 +169,20 @@ export default function HomePage() {
     }
   }
 
+  function handleFollowUp(question: string) {
+    setQuery(question.replace(/^•\s*/, ""));
+  }
+
   function handleExampleClick(example: string) {
     setQuery(example);
+    setSessionId(undefined);
+    setResult(null);
+  }
+
+  function handleNewConversation() {
+    setSessionId(undefined);
+    setResult(null);
+    setQuery("");
   }
 
   const profile = result?.extracted_profile;
@@ -176,16 +192,22 @@ export default function HomePage() {
       {/* Header */}
       <header className="gradient-header border-b border-gray-200">
         <div className="mx-auto max-w-5xl px-4 py-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-navy text-white">
-              <Shield className="h-7 w-7" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-navy text-white">
+                <Shield className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-navy">GovtAssist AI</h1>
+                <p className="text-sm text-gray-600">
+                  Discover government schemes you may be eligible for
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-navy">GovtAssist AI</h1>
-              <p className="text-sm text-gray-600">
-                Discover government schemes you may be eligible for
-              </p>
-            </div>
+            <nav className="flex gap-4 text-sm">
+              <span className="font-medium text-navy">Discover</span>
+              <Link href="/schemes" className="text-gray-600 hover:text-navy">Browse Schemes</Link>
+            </nav>
           </div>
         </div>
       </header>
@@ -201,10 +223,18 @@ export default function HomePage() {
           </p>
 
           <form onSubmit={handleSubmit} className="mt-4">
+            {sessionId && (
+              <div className="mb-3 flex items-center justify-between rounded-lg bg-navy/5 px-3 py-2 text-xs text-navy">
+                <span>Continuing conversation — profile builds across messages</span>
+                <button type="button" onClick={handleNewConversation} className="font-medium hover:underline">
+                  New conversation
+                </button>
+              </div>
+            )}
             <textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. I am a 23-year-old graduate from Haryana with a family income of ₹4 lakh..."
+              placeholder={sessionId ? "Add more details, e.g. my income is 4 lakh..." : "e.g. I am a 23-year-old graduate from Haryana with a family income of ₹4 lakh..."}
               rows={3}
               className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/20 resize-none"
             />
@@ -301,15 +331,19 @@ export default function HomePage() {
             {result.follow_up_questions.length > 0 && (
               <section className="rounded-xl border border-amber-200 bg-amber-50 p-5">
                 <h3 className="text-sm font-semibold text-amber-800">
-                  To improve results, please also share:
+                  To improve results, click to answer:
                 </h3>
-                <ul className="mt-2 space-y-1">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {result.follow_up_questions.map((q, i) => (
-                    <li key={i} className="text-sm text-amber-700">
-                      • {q}
-                    </li>
+                    <button
+                      key={i}
+                      onClick={() => handleFollowUp(q)}
+                      className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-800 hover:bg-amber-100 transition-colors"
+                    >
+                      {q}
+                    </button>
                   ))}
-                </ul>
+                </div>
               </section>
             )}
 

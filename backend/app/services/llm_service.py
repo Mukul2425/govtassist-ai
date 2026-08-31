@@ -42,14 +42,8 @@ class LLMService:
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
     async def embed(self, text: str) -> list[float]:
-        if not self._client:
-            return [0.0] * 1536
-
-        response = await self._client.embeddings.create(
-            model=settings.openai_embedding_model,
-            input=text,
-        )
-        return response.data[0].embedding
+        from app.services.embedding_service import embedding_service
+        return await embedding_service.embed(text)
 
     async def extract_profile(self, query: str) -> tuple[UserProfile, float, list[str]]:
         if not self._client:

@@ -26,5 +26,6 @@ async def get_recommendations(
         session=db,
         query=request.query,
         profile=request.profile,
+        session_id=request.session_id,
         max_results=request.max_results,
     )

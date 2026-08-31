@@ -36,11 +36,15 @@ services:
     container_name: govtassist-backend
     ports:
       - "8000:8000"
+    command: >
+      sh -c "python -m scripts.seed_data &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     environment:
       DATABASE_URL: postgresql+asyncpg://govtassist:govtassist@postgres:5432/govtassist
       DATABASE_URL_SYNC: postgresql://govtassist:govtassist@postgres:5432/govtassist
       REDIS_URL: redis://redis:6379/0
       LLM_MOCK_MODE: "true"
+      ADMIN_API_KEY: dev-admin-key
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
     depends_on:
       postgres:
@@ -49,9 +53,6 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-    command: >
-      sh -c "python -m scripts.seed_data &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:
     build:

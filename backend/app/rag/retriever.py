@@ -1,11 +1,11 @@
-"""RAG retrieval using pgvector semantic search."""
+"""RAG retrieval using pgvector semantic search with text fallback."""
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.logging_config import get_logger
 from app.models.scheme import SchemeDocument
-from app.services.llm_service import llm_service
+from app.services.embedding_service import embedding_service
 
 logger = get_logger(__name__)
 
@@ -16,26 +16,21 @@ async def retrieve_scheme_context(
     query: str,
     top_k: int = 3,
 ) -> list[str]:
-    """Retrieve relevant document chunks for a scheme."""
-    if llm_service.is_available:
-        try:
-            embedding = await llm_service.embed(f"{query} {scheme_id}")
-            result = await session.execute(
-                text("""
-                    SELECT content, title
-                    FROM scheme_documents
-                    WHERE scheme_id = :scheme_id
-                      AND embedding IS NOT NULL
-                    ORDER BY embedding <=> :embedding
-                    LIMIT :top_k
-                """),
-                {"scheme_id": scheme_id, "embedding": str(embedding), "top_k": top_k},
-            )
-            rows = result.fetchall()
-            if rows:
-                return [f"{row.title}: {row.content[:500]}" for row in rows]
-        except Exception as e:
-            logger.warning("vector_search_failed", error=str(e), scheme_id=scheme_id)
+    """Retrieve relevant document chunks for a scheme via vector similarity."""
+    try:
+        query_vector = await embedding_service.embed(f"{query} {scheme_id}")
+        result = await session.execute(
+            select(SchemeDocument)
+            .where(SchemeDocument.scheme_id == scheme_id)
+            .where(SchemeDocument.embedding.isnot(None))
+            .order_by(SchemeDocument.embedding.cosine_distance(query_vector))
+            .limit(top_k)
+        )
+        docs = result.scalars().all()
+        if docs:
+            return [f"{doc.title}: {doc.content[:500]}" for doc in docs]
+    except Exception as e:
+        logger.warning("vector_search_failed", error=str(e), scheme_id=scheme_id)
 
     result = await session.execute(
         select(SchemeDocument)
