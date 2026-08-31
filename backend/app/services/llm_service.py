@@ -96,19 +96,31 @@ Only include fields explicitly mentioned or clearly implied. Use null for unknow
         profile_data: dict[str, Any] = {}
         notes = ["Using rule-based profile extraction (LLM mock mode)"]
 
-        age_match = re.search(r"(\d{1,3})\s*(?:years?\s*old|yrs?|year)", q)
+        age_match = re.search(r"(\d{1,3})\s*(?:years?\s*old|yrs?\b|year\b)", q)
         if age_match:
             profile_data["age"] = int(age_match.group(1))
 
-        income_match = re.search(r"(?:₹|rs\.?|inr\s*)?(\d+(?:\.\d+)?)\s*(?:lakh|lac|lpa|crore|cr)?", q)
-        if income_match:
-            amount = float(income_match.group(1))
-            if "crore" in q or "cr" in q:
-                profile_data["annual_family_income"] = int(amount * 10_000_000)
-            elif "lakh" in q or "lac" in q or "lpa" in q:
-                profile_data["annual_family_income"] = int(amount * 100_000)
-            else:
-                profile_data["annual_family_income"] = int(amount)
+        income_patterns = [
+            r"(?:income|earning|salary)[^\d]{0,30}(?:₹|rs\.?|inr\s*)?(\d+(?:\.\d+)?)\s*(lakh|lac|lpa|crore|cr)?",
+            r"(?:₹|rs\.?|inr\s*)?(\d+(?:\.\d+)?)\s*(lakh|lac|lpa|crore|cr)\b",
+        ]
+        for pattern in income_patterns:
+            income_match = re.search(pattern, q)
+            if income_match:
+                amount = float(income_match.group(1))
+                unit = (income_match.group(2) or "").lower() if income_match.lastindex and income_match.lastindex >= 2 else ""
+                if not unit and ("crore" in q[income_match.start():] or "cr" in q[income_match.start():]):
+                    unit = "crore"
+                elif not unit and any(u in q[income_match.start():] for u in ("lakh", "lac", "lpa")):
+                    unit = "lakh"
+
+                if unit in ("crore", "cr"):
+                    profile_data["annual_family_income"] = int(amount * 10_000_000)
+                elif unit in ("lakh", "lac", "lpa"):
+                    profile_data["annual_family_income"] = int(amount * 100_000)
+                else:
+                    profile_data["annual_family_income"] = int(amount)
+                break
 
         states = [
             "andhra pradesh", "arunachal pradesh", "assam", "bihar", "chhattisgarh",

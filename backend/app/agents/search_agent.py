@@ -32,7 +32,8 @@ async def search_schemes(
             )
         )
 
-    if query:
+    # Apply keyword filter only for short search terms, not full NL profile queries
+    if query and len(query.split()) <= 4:
         search_term = f"%{query.lower()}%"
         stmt = stmt.where(
             or_(
